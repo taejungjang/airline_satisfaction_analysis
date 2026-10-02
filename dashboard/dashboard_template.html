@@ -1,0 +1,341 @@
+<title>항공 만족도 대시보드</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: sticky tab bar over three panels (results / simulator / explorer). Horizontal bar rows, one scale per chart, navy = primary series, orange = highlight. */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#1B2430; --ink2:#566170; --ink3:#8793A3; --grid:#E2E7ED;
+  --a:#1F3A5F; --b:#E07B39; --a-soft:#DCE4EF; --b-soft:#FBE6D8; --focus:#2F6FDE;
+  --f-body:'Noto Sans KR',system-ui,-apple-system,'Segoe UI','Malgun Gothic',sans-serif;
+  --f-num:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10151C; --surface:#18202A; --ink:#E7EBF1; --ink2:#A3AEBD; --ink3:#728096; --grid:#2A3441;
+  --a:#7FA6D9; --b:#F0985A; --a-soft:#26364D; --b-soft:#41301F; --focus:#7FB0FF; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10151C; --surface:#18202A; --ink:#E7EBF1; --ink2:#A3AEBD; --ink3:#728096; --grid:#2A3441;
+  --a:#7FA6D9; --b:#F0985A; --a-soft:#26364D; --b-soft:#41301F; --focus:#7FB0FF; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;padding-inline:16px}
+.wrap{max-width:1080px;margin-inline:auto;padding-block:24px 48px}
+h1{font-size:clamp(22px,4vw,30px);font-weight:900;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:17px;font-weight:700;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--ink2);margin:6px 0 0;max-width:62ch}
+.src{display:inline-block;margin-top:10px;font-size:12.5px;color:var(--ink2);border:1px solid var(--grid);border-radius:999px;padding:2px 10px;background:var(--surface)}
+.tabs{display:flex;gap:4px;margin:20px 0 18px;border-bottom:1px solid var(--grid);position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;overflow-x:auto}
+.tabs button{font:inherit;font-weight:500;color:var(--ink2);background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--b);font-weight:700}
+button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.panel{background:var(--surface);border:1px solid var(--grid);border-radius:10px;padding:18px;min-width:0}
+.panel p.note{color:var(--ink2);font-size:13px;margin:2px 0 14px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 28px;margin-bottom:16px}
+.kpi{min-width:0}.kpi .l{font-size:12.5px;color:var(--ink2)}
+.kpi .v{font-family:var(--f-num);font-weight:600;font-size:24px}
+.kpi .v.hl{color:var(--b)}
+.def{background:var(--a-soft);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13.5px}
+.def b{font-weight:700}
+/* bar rows */
+.rows{display:grid;gap:8px}
+.row{display:grid;grid-template-columns:minmax(5.5rem,8.5rem) 1fr 4.6rem;align-items:center;gap:10px;font-size:14px}
+.row .lab{color:var(--ink);overflow-wrap:anywhere}
+.row .trk{height:20px;position:relative;border-left:1px solid var(--ink3)}
+.row .bar{height:100%;background:var(--ink3);border-radius:0 4px 4px 0;min-width:2px;transition:width .25s}
+.row .bar.hl{background:var(--b)} .row .bar.a{background:var(--a)} .row .bar.b{background:var(--b)}
+.row .val{font-family:var(--f-num);font-size:13px;text-align:right}
+.row.dim{opacity:.55}
+.dual{display:grid;gap:3px}
+.dual .trk{height:14px}
+.leg{display:flex;gap:16px;font-size:13px;color:var(--ink2);margin:0 0 10px;flex-wrap:wrap}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.take{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:14px}
+.take li{padding-left:14px;position:relative}
+.take li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;background:var(--b);border-radius:50%}
+/* controls */
+.ctrls{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:flex-end;margin-bottom:16px}
+.ctrls label{display:grid;gap:4px;font-size:12.5px;color:var(--ink2);min-width:0}
+select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--ink3);border-radius:6px;padding:7px 10px;min-width:9rem;max-width:100%}
+input[type=range]{width:min(240px,100%);accent-color:var(--b)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:13px;border:1px solid var(--ink3);background:var(--surface);color:var(--ink2);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--a);border-color:var(--a);color:var(--surface);font-weight:700}
+.fgrp{display:grid;gap:4px}.fgrp>span{font-size:12.5px;color:var(--ink2)}
+/* simulator result */
+.res{display:flex;flex-wrap:wrap;gap:6px 26px;align-items:baseline;margin-bottom:12px}
+.res .big{font-family:var(--f-num);font-weight:600;font-size:clamp(28px,6vw,40px)}
+.res .arrow{color:var(--ink3);font-size:22px}
+.res .up{color:var(--b)}
+.gauge{height:26px;background:var(--grid);border-radius:4px;position:relative;margin:6px 0 4px;overflow:hidden}
+.gauge .g1{position:absolute;inset:0 auto 0 0;background:var(--a)}
+.gauge .g2{position:absolute;inset:0 auto 0 0;background:var(--b)}
+.gaxis{display:flex;justify-content:space-between;font-family:var(--f-num);font-size:11.5px;color:var(--ink3)}
+.warn{font-size:12.5px;color:var(--ink2);margin-top:10px}
+/* score columns */
+.cols{display:flex;gap:8px;align-items:flex-end;height:210px;border-bottom:1px solid var(--ink3);padding-top:22px}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;position:relative}
+.col .cb{width:70%;max-width:56px;background:var(--ink3);border-radius:4px 4px 0 0;min-height:2px;transition:height .25s}
+.col .cb.hi{background:var(--b)}
+.col .cv{font-family:var(--f-num);font-size:12px;margin-bottom:3px}
+.xl{display:flex;gap:8px;font-size:12.5px;color:var(--ink2);margin-top:4px}
+.xl div{flex:1;text-align:center;min-width:0}
+.xl small{display:block;color:var(--ink3);font-family:var(--f-num);font-size:11px}
+/* heatmap */
+.hm{overflow-x:auto}
+.hmg{display:grid;grid-template-columns:minmax(7.5rem,9.5rem) repeat(6,minmax(44px,1fr));gap:2px;min-width:420px;font-size:12.5px}
+.hmg .h{color:var(--ink2);text-align:center;padding:2px 0}
+.hmg .n{color:var(--ink);padding:5px 0;overflow-wrap:anywhere}
+.hmg .c{font-family:var(--f-num);text-align:center;padding:5px 0;border-radius:3px}
+.hmg .n.sel{font-weight:700}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 10px;border-radius:6px;font-size:12.5px;max-width:260px;line-height:1.45;opacity:0;transition:opacity .08s}
+footer{margin-top:28px;font-size:12.5px;color:var(--ink2);display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>항공 승객 만족도 대시보드</h1>
+    <p class="sub">서비스 평가를 4점 미만에서 4점 이상으로 올리면 전체 비행 만족률이 몇 %p 오르는지 비교함</p>
+    <span class="src">데이터: Kaggle 항공 승객 만족도 설문 · 승객 103,904명</span>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="대시보드 구역">
+    <button role="tab" id="t-results" aria-selected="true" aria-controls="p-results" data-tab="results">핵심 결과</button>
+    <button role="tab" id="t-sim" aria-selected="false" aria-controls="p-sim" data-tab="sim">시뮬레이터</button>
+    <button role="tab" id="t-eda" aria-selected="false" aria-controls="p-eda" data-tab="eda">데이터 탐색</button>
+  </div>
+
+  <!-- 핵심 결과 -->
+  <section id="p-results" role="tabpanel" aria-labelledby="t-results">
+    <div class="kpis">
+      <div class="kpi"><div class="l">전체 비행 만족률 (현재)</div><div class="v" id="k-base">43.3%</div></div>
+      <div class="kpi"><div class="l">1위 기내 와이파이</div><div class="v hl" id="k-1">+11.8%p</div></div>
+      <div class="kpi"><div class="l">2위 온라인 탑승</div><div class="v hl" id="k-2">+8.2%p</div></div>
+    </div>
+    <div class="def"><b>기준</b> 서비스 평가가 4점 미만 → 4점 이상으로 오를 때, 전체 비행 만족률이 몇 %p 오르는가 (로지스틱 회귀 추정)</div>
+    <div class="grid">
+      <div class="panel">
+        <h2>서비스별 개선 효과</h2>
+        <p class="note">전체 승객 기준, 상승폭이 큰 순서</p>
+        <div class="rows" id="rank"></div>
+        <ul class="take"><li>와이파이와 온라인 탑승은 3위(다리 공간)보다 2배 이상 큼</li><li>음식·게이트 위치는 영향이 거의 없음</li></ul>
+      </div>
+      <div class="panel">
+        <h2>승객 유형별 비교</h2>
+        <p class="note">같은 기준을 출장 승객과 개인 여행 승객으로 나눠 추정</p>
+        <div class="leg"><span><i style="background:var(--a)"></i>출장</span><span><i style="background:var(--b)"></i>개인 여행</span></div>
+        <div class="rows" id="seg"></div>
+        <ul class="take"><li>와이파이는 두 유형 모두 상승하고, 개인 여행 승객에서 특히 큼</li><li>온라인 탑승·체크인은 출장 승객에서만 상승함</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 시뮬레이터 -->
+  <section id="p-sim" role="tabpanel" aria-labelledby="t-sim" hidden>
+    <div class="panel">
+      <h2>개선 시뮬레이터</h2>
+      <p class="note">개선 비율 = 현재 4점 미만인 승객 중 4점 이상으로 올라가는 승객의 비율</p>
+      <div class="ctrls">
+        <label for="s-grp">승객군<select id="s-grp"></select></label>
+        <label for="s-svc">개선할 서비스<select id="s-svc"></select></label>
+        <label for="s-q">개선 비율 <b id="s-qv" style="font-family:var(--f-num);color:var(--ink)">50%</b><input type="range" id="s-q" min="0" max="100" step="10" value="50"></label>
+      </div>
+      <div class="res" aria-live="polite">
+        <div><div class="kpi"><div class="l">현재 만족률</div></div><span class="big" id="r-base">-</span></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div><div class="kpi"><div class="l">예상 만족률</div></div><span class="big up" id="r-exp">-</span></div>
+        <div><div class="kpi"><div class="l">상승폭</div></div><span class="big up" id="r-up">-</span></div>
+      </div>
+      <div class="gauge" aria-hidden="true"><div class="g2" id="g-exp"></div><div class="g1" id="g-base"></div></div>
+      <div class="gaxis"><span>0%</span><span>50%</span><span>100%</span></div>
+      <h2 style="margin-top:22px">같은 개선 비율일 때 서비스별 비교</h2>
+      <p class="note" id="cmp-note"></p>
+      <div class="rows" id="cmp"></div>
+      <p class="warn">"와이파이 + 온라인 탑승", "상위 4개 전체"는 여러 서비스를 동시에 올린 값으로, 모델이 학습 범위를 벗어나 예측하므로 실제보다 크게 나올 수 있음. 상관 기반 추정이며 실제 효과는 시범 적용으로 확인 필요.</p>
+    </div>
+  </section>
+
+  <!-- 데이터 탐색 -->
+  <section id="p-eda" role="tabpanel" aria-labelledby="t-eda" hidden>
+    <div class="panel" style="margin-bottom:16px">
+      <div class="ctrls" style="margin-bottom:6px">
+        <div class="fgrp"><span>여행 목적</span><div class="chips" id="f-t"></div></div>
+        <div class="fgrp"><span>고객 유형</span><div class="chips" id="f-c"></div></div>
+        <div class="fgrp"><span>좌석 등급</span><div class="chips" id="f-k"></div></div>
+      </div>
+      <div class="kpis" style="margin:10px 0 0">
+        <div class="kpi"><div class="l">선택한 승객</div><div class="v" id="e-n">-</div></div>
+        <div class="kpi"><div class="l">전체 비행 만족률</div><div class="v hl" id="e-rate">-</div></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h2>서비스 점수별 전체 비행 만족률</h2>
+        <p class="note">개별 서비스 평가 점수(가로)별로 전체 비행에 만족한 승객 비율(세로)</p>
+        <div class="ctrls" style="margin-bottom:10px"><label for="e-svc">서비스<select id="e-svc"></select></label></div>
+        <div class="cols" id="cols"></div>
+        <div class="xl" id="xl"></div>
+        <p class="warn">4점부터 만족률이 크게 오르면 "4점 이상" 기준이 의미 있다는 근거가 됨. 0점은 "해당없음".</p>
+      </div>
+      <div class="panel">
+        <h2>승객 유형별 전체 비행 만족률</h2>
+        <p class="note">선택한 필터 안에서 각 유형의 만족률</p>
+        <div class="rows" id="grp"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>서비스 × 점수 만족률 지도</h2>
+      <p class="note">진할수록 전체 비행 만족률이 높음. 승객 30명 미만 칸은 표시하지 않음</p>
+      <div class="hm"><div class="hmg" id="hm"></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>방법: 로지스틱 회귀(서비스 점수를 4점 이상 여부로 변환), 80/20 분할 정확도 89.3%, AUC 0.943</span>
+    <span>상승폭은 상관 기반 추정이며, 해당 서비스를 전원 개선했다고 가정한 값임</span>
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+/*__DATA__*/
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var f1=function(v){return v.toFixed(1)};
+  var TIP=$('tip');
+  /* tooltip */
+  function showTip(e){
+    var t=e.target.closest?e.target.closest('[data-tip]'):null;
+    if(!t){TIP.style.opacity=0;return}
+    TIP.textContent=t.getAttribute('data-tip');TIP.style.opacity=1;
+    var x,y;
+    if(e.clientX){x=e.clientX;y=e.clientY}else{var r=t.getBoundingClientRect();x=r.left+r.width/2;y=r.top}
+    var w=TIP.offsetWidth,h=TIP.offsetHeight;
+    TIP.style.left=Math.max(8,Math.min(window.innerWidth-w-8,x+12))+'px';
+    TIP.style.top=Math.max(8,y-h-10)+'px';
+  }
+  document.addEventListener('mousemove',showTip);
+  document.addEventListener('mouseleave',function(){TIP.style.opacity=0});
+  document.addEventListener('focusin',showTip);
+  document.addEventListener('focusout',function(){TIP.style.opacity=0});
+
+  /* tabs */
+  var TABS=['results','sim','eda'];
+  function setTab(n){
+    if(TABS.indexOf(n)<0)n='results';
+    TABS.forEach(function(t){
+      $('p-'+t).hidden=(t!==n);
+      $('t-'+t).setAttribute('aria-selected',t===n?'true':'false');
+    });
+    try{history.replaceState(null,'','#'+n)}catch(e){}
+  }
+  TABS.forEach(function(t){$('t-'+t).addEventListener('click',function(){setTab(t)})});
+  var h0='';try{h0=(location.hash||'').replace('#','')}catch(e){}
+  setTab(h0);
+
+  /* ---- 핵심 결과 ---- */
+  var base0=LIFT.filter(function(r){return r.g==='전체'})[0].base;
+  $('k-base').textContent=f1(base0)+'%';
+  $('k-1').textContent='+'+f1(ALL[0].lift)+'%p'; $('k-2').textContent='+'+f1(ALL[1].lift)+'%p';
+  var mx=ALL[0].lift, rk='';
+  ALL.forEach(function(r,i){
+    var tip=r.s+'을(를) 4점 이상으로 개선하면 전체 비행 만족률 +'+f1(r.lift)+'%p ('+f1(base0)+'% → '+f1(base0+r.lift)+'%)';
+    rk+='<div class="row" tabindex="0" data-tip="'+tip+'"><span class="lab">'+r.s+'</span><span class="trk"><div class="bar'+(i<2?' hl':'')+'" style="width:'+(r.lift/mx*100)+'%"></div></span><span class="val">+'+f1(r.lift)+'%p</span></div>';
+  });
+  $('rank').innerHTML=rk;
+  function lift(g,s){var r=LIFT.filter(function(x){return x.g===g&&x.s===s})[0];return r?r.lift:0}
+  var segHtml='';
+  ['기내 와이파이','온라인 탑승','체크인'].forEach(function(s){
+    var a=lift('출장',s),b=lift('개인 여행',s),m=31;
+    segHtml+='<div class="row" style="align-items:start"><span class="lab" style="padding-top:2px">'+s+'</span><span class="dual">'+
+      '<span class="trk" tabindex="0" data-tip="출장 승객: '+s+' 개선 시 +'+f1(a)+'%p"><div class="bar a" style="width:'+(a/m*100)+'%"></div></span>'+
+      '<span class="trk" tabindex="0" data-tip="개인 여행 승객: '+s+' 개선 시 +'+f1(b)+'%p"><div class="bar b" style="width:'+(b/m*100)+'%"></div></span></span>'+
+      '<span class="val dual" style="display:grid;gap:3px"><span style="height:14px;line-height:14px">+'+f1(a)+'</span><span style="height:14px;line-height:14px">+'+f1(b)+'</span></span></div>';
+  });
+  $('seg').innerHTML=segHtml;
+
+  /* ---- 시뮬레이터 ---- */
+  var GROUPS=['전체','출장','개인 여행','충성','비충성'];
+  var SETS=['기내 와이파이','온라인 탑승','체크인','다리 공간','와이파이 + 온라인 탑승','상위 4개 전체'];
+  function opts(el,list,sel){el.innerHTML=list.map(function(x){return '<option'+(x===sel?' selected':'')+'>'+x+'</option>'}).join('')}
+  opts($('s-grp'),GROUPS,'전체'); opts($('s-svc'),SETS,'기내 와이파이');
+  function sim(){
+    var g=$('s-grp').value,s=$('s-svc').value,q=+$('s-q').value;
+    $('s-qv').textContent=q+'%';
+    var row=LIFT.filter(function(x){return x.g===g&&x.s===s})[0];
+    var up=row.lift*q/100, exp=row.base+up;
+    $('r-base').textContent=f1(row.base)+'%'; $('r-exp').textContent=f1(exp)+'%'; $('r-up').textContent='+'+f1(up)+'%p';
+    $('g-base').style.width=row.base+'%'; $('g-exp').style.width=Math.min(exp,100)+'%';
+    $('cmp-note').textContent=g+' 승객 · 개선 비율 '+q+'% 기준 예상 상승폭';
+    var mxs=Math.max.apply(null,SETS.map(function(k){return lift(g,k)}))||1, h='';
+    SETS.forEach(function(k){
+      var v=lift(g,k)*q/100, sel=k===s;
+      h+='<div class="row'+(sel?'':' dim')+'" tabindex="0" data-tip="'+g+' 승객에서 '+k+' 개선 시 +'+f1(v)+'%p ('+f1(LIFT.filter(function(x){return x.g===g&&x.s===k})[0].base+v)+'%)"><span class="lab">'+k+'</span><span class="trk"><div class="bar '+(sel?'hl':'')+'" style="width:'+(v/mxs*100)+'%"></div></span><span class="val">+'+f1(v)+'%p</span></div>';
+    });
+    $('cmp').innerHTML=h;
+  }
+  ['s-grp','s-svc','s-q'].forEach(function(i){$(i).addEventListener('input',sim)});
+  sim();
+
+  /* ---- 데이터 탐색 ---- */
+  var DIMS={t:['출장','개인 여행'],c:['충성','비충성'],k:['비즈니스','이코노미 플러스','이코노미']};
+  var SEL={t:DIMS.t.slice(),c:DIMS.c.slice(),k:DIMS.k.slice()};
+  var SVCS=[]; SUM.forEach(function(r){if(SVCS.indexOf(r[3])<0)SVCS.push(r[3])});
+  opts($('e-svc'),SVCS,'기내 와이파이');
+  function chips(key){
+    $('f-'+key).innerHTML=DIMS[key].map(function(v){return '<button class="chip" aria-pressed="'+(SEL[key].indexOf(v)>=0)+'" data-k="'+key+'" data-v="'+v+'">'+v+'</button>'}).join('');
+  }
+  ['t','c','k'].forEach(chips);
+  document.addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('.chip'):null; if(!b)return;
+    var k=b.getAttribute('data-k'),v=b.getAttribute('data-v'),i=SEL[k].indexOf(v);
+    if(i>=0){if(SEL[k].length>1)SEL[k].splice(i,1)}else SEL[k].push(v);
+    chips(k); eda();
+  });
+  $('e-svc').addEventListener('input',eda);
+  function pass(r){return SEL.t.indexOf(r[0])>=0&&SEL.c.indexOf(r[1])>=0&&SEL.k.indexOf(r[2])>=0}
+  function eda(){
+    var svc=$('e-svc').value, sc={}, tot={n:0,s:0}, g={t:{},c:{},k:{}}, hm={};
+    SUM.forEach(function(r){
+      if(!pass(r))return;
+      var key=r[3]+'|'+r[4]; var o=hm[key]||(hm[key]={n:0,s:0}); o.n+=r[5]; o.s+=r[6];
+      if(r[3]===svc){var p=sc[r[4]]||(sc[r[4]]={n:0,s:0}); p.n+=r[5]; p.s+=r[6]}
+      if(r[3]==='기내 와이파이'){tot.n+=r[5];tot.s+=r[6];
+        [['t',r[0]],['c',r[1]],['k',r[2]]].forEach(function(d){var q=g[d[0]][d[1]]||(g[d[0]][d[1]]={n:0,s:0});q.n+=r[5];q.s+=r[6]})}
+    });
+    $('e-n').textContent=tot.n.toLocaleString('ko-KR')+'명';
+    $('e-rate').textContent=tot.n?f1(tot.s/tot.n*100)+'%':'-';
+    /* score columns */
+    var cols='',xl='';
+    for(var s=0;s<=5;s++){
+      var o=sc[s]||{n:0,s:0}, rate=o.n>=30?o.s/o.n*100:null;
+      var tip=svc+' '+s+'점'+(s===0?'(해당없음)':'')+': 승객 '+o.n.toLocaleString('ko-KR')+'명 중 '+(rate===null?'표본 부족':f1(rate)+'% 만족');
+      cols+='<div class="col" tabindex="0" data-tip="'+tip+'"><span class="cv">'+(rate===null?'-':Math.round(rate)+'%')+'</span><div class="cb'+(s>=4?' hi':'')+'" style="height:'+(rate===null?0:rate*0.78)+'%"></div></div>';
+      xl+='<div>'+(s===0?'해당<br>없음':s+'점')+'<small>n='+o.n.toLocaleString('ko-KR')+'</small></div>';
+    }
+    $('cols').innerHTML=cols; $('xl').innerHTML=xl;
+    /* groups */
+    var gh='';
+    [['t','여행 목적'],['c','고객 유형'],['k','좌석 등급']].forEach(function(d){
+      DIMS[d[0]].forEach(function(v){
+        var o=g[d[0]][v]; if(SEL[d[0]].indexOf(v)<0||!o||!o.n)return;
+        var rt=o.s/o.n*100;
+        gh+='<div class="row" tabindex="0" data-tip="'+d[1]+' '+v+': 승객 '+o.n.toLocaleString('ko-KR')+'명, 만족 '+f1(rt)+'%"><span class="lab">'+v+'</span><span class="trk"><div class="bar a" style="width:'+rt+'%"></div></span><span class="val">'+f1(rt)+'%</span></div>';
+      });
+    });
+    $('grp').innerHTML=gh||'<p class="note">선택한 조건에 해당하는 승객이 없음</p>';
+    /* heatmap */
+    var h='<div class="h"></div>';
+    for(var s2=0;s2<=5;s2++)h+='<div class="h">'+(s2===0?'해당없음':s2+'점')+'</div>';
+    SVCS.forEach(function(v){
+      h+='<div class="n'+(v===svc?' sel':'')+'">'+v+'</div>';
+      for(var s3=0;s3<=5;s3++){
+        var o2=hm[v+'|'+s3];
+        if(!o2||o2.n<30){h+='<div class="c" style="color:var(--ink3)">-</div>';continue}
+        var r2=o2.s/o2.n*100;
+        h+='<div class="c" tabindex="0" data-tip="'+v+' '+s3+'점: '+f1(r2)+'% 만족 (승객 '+o2.n.toLocaleString('ko-KR')+'명)" style="background:color-mix(in srgb,var(--a) '+Math.round(r2*0.9+4)+'%,var(--surface));color:'+(r2>45?'#fff':'var(--ink)')+'">'+Math.round(r2)+'</div>';
+      }
+    });
+    $('hm').innerHTML=h;
+  }
+  eda();
+})();
+</script>

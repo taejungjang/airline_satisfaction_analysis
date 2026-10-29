@@ -1,62 +1,67 @@
-import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from config import *
-from pathlib import Path
-import runpy, json
-import pandas as pd, numpy as np, statsmodels.api as sm
-import matplotlib; matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-g = runpy.run_path(str(Path(__file__).resolve().parent / '01_analysis.py'))
-mf, b2, pf = g['mf'], g['b2'], g['pf']
-OUT = g['OUT']; NUM = g['NUM']
-BL = '#1F3A5F'; OR = '#E07B39'; GR = '#9AA5B1'
+"""2단계: 서비스를 '모든 승객 4점 이상'으로 설정했을 때 모델이 예측한 만족률 변화량 계산
 
-def lift(model, B, flag_cols, zero_cols=()):
-    X = B.copy()
-    for c in flag_cols: X[c] = 1.0
-    for c in zero_cols: X[c] = 0.0
-    return float(model.predict(X).mean() - model.predict(B).mean())
+  A. 전체 승객: 서비스 9개 각각의 변화량(%p)  -> 우선순위를 정하는 기준
+  B. 구분별(여행 목적, 고객 유형, 좌석 등급): 와이파이, 온라인 탑승, 체크인의 변화량
 
-items = {
- '기내 와이파이': (['Inflight wifi service_good'], []),
- '온라인 탑승': (['Online boarding_good'], []),
- '체크인': (['Checkin service_good'], ['Checkin service_normal']),
- '다리 공간': (['Leg room service_good'], ['Leg room service_normal']),
- '탑승 서비스': (['On-board service_good'], []),
- '좌석 편안함': (['Seat comfort_good'], []),
- '기내 서비스': (['Inflight service_good'], []),
- '수하물 처리': (['Baggage handling_good'], []),
- '청결도': (['Cleanliness_good'], ['Cleanliness_normal']),
+저장하는 파일 (output/ 폴더)
+  lift.json : {"overall": 서비스별 변화량, "seg": 구분별 변화량과 현재 만족률, "base": 모델이 예측한 현재 만족률}
+"""
+import json
+
+from common import (
+    SERVICE_IMPROVEMENT,
+    fit_segment_model,
+    keep_existing_columns,
+    prepare_segment_data,
+    satisfaction_lift,
+    segment_masks,
+    train_models,
+)
+from config import OUTPUT
+
+# ------------------------------------------------------------------
+# A. 전체 승객 기준 서비스별 변화량 (최종 모델 + 검증 데이터)
+# ------------------------------------------------------------------
+results = train_models()
+final_model = results["final_model"]
+valid_matrix = results["valid_matrix"]
+
+overall_lift = {}
+for service_name, setting in SERVICE_IMPROVEMENT.items():
+    lift = satisfaction_lift(final_model, valid_matrix, setting["good"], setting["reset"])
+    overall_lift[service_name] = lift * 100          # 비율을 %p 로 바꾼다
+print({name: round(value, 1) for name, value in overall_lift.items()})
+
+# ------------------------------------------------------------------
+# B. 구분별 변화량: 구분마다 모델을 따로 학습해서 계산
+#    (구분별 모델은 전체 데이터로 학습하고, 비행 거리 이상치 보정은 하지 않는다)
+# ------------------------------------------------------------------
+data, features, satisfied = prepare_segment_data()
+masks = segment_masks(data)
+
+services_to_check = ["기내 와이파이", "온라인 탑승", "체크인"]
+segment_lift = {}
+for segment_name, mask in masks.items():
+    model, matrix = fit_segment_model(features, satisfied, mask)
+
+    segment_lift[segment_name] = {}
+    for service_name in services_to_check:
+        setting = SERVICE_IMPROVEMENT[service_name]
+        good_columns = keep_existing_columns(setting["good"], matrix)
+        reset_columns = keep_existing_columns(setting["reset"], matrix)
+        lift = satisfaction_lift(model, matrix, good_columns, reset_columns)
+        segment_lift[segment_name][service_name] = lift * 100
+
+    segment_lift[segment_name]["base"] = float(satisfied[mask].mean() * 100)   # 이 구분의 현재 만족률
+print(json.dumps(segment_lift, ensure_ascii=False, indent=1))
+
+# ------------------------------------------------------------------
+# 저장
+# ------------------------------------------------------------------
+output = {
+    "overall": overall_lift,
+    "seg": segment_lift,
+    "base": results["predicted_satisfaction_rate"] * 100,
 }
-res = {k: lift(mf, b2, f, z) * 100 for k, (f, z) in items.items()}
-print({k: round(v, 1) for k, v in res.items()})
-print('baseline', pf.mean())
-ser = pd.Series(res).sort_values()
-fig, ax = plt.subplots(figsize=(8.6, 5))
-ax.barh(ser.index, ser.values, color=[OR if v >= 4 else GR for v in ser.values], height=.62)
-for i, v in enumerate(ser.values): ax.text(v + .2, i, f'+{v:.1f}%p', va='center', fontsize=12, fontweight='bold')
-ax.set_xlim(0, ser.max() + 3); ax.set_xlabel('전체 비행 만족률 상승폭 (%p)'); ax.tick_params(axis='y', labelsize=12)
-for s in ['top', 'right']: ax.spines[s].set_visible(False)
-plt.tight_layout(); plt.savefig(OUT + 'lift.png', dpi=200); plt.close()
-
-# segment models (same feature engineering, fit per segment on full data)
-df = pd.read_csv(TRAIN_CSV, index_col=0).drop(columns='id')
-df['Arrival Delay in Minutes'] = df['Arrival Delay in Minutes'].fillna(df['Departure Delay in Minutes'])
-y = (df.satisfaction == 'satisfied').astype(int)
-X = df.drop(columns=['satisfaction', 'Arrival Delay in Minutes'])
-c1 = lambda x: 'bad' if x <= 1 else 'normal' if x <= 3 else 'good'
-c2 = lambda x: 'bad_or_normal' if x <= 3 else 'good'
-for c in ["Food and drink", "Leg room service", "Checkin service", "Cleanliness"]: X[c] = X[c].apply(c1)
-for c in ["Inflight wifi service", "Ease of Online booking", "Online boarding", "Seat comfort", "Inflight entertainment", "On-board service", "Baggage handling", "Inflight service", "Departure/Arrival time convenient"]: X[c] = X[c].apply(c2)
-seg = {'출장': df['Type of Travel'] == 'Business travel', '개인 여행': df['Type of Travel'] != 'Business travel',
-       '충성': df['Customer Type'] == 'Loyal Customer', '비충성': df['Customer Type'] != 'Loyal Customer',
-       '이코노미': df['Class'] == 'Eco', '이코노미 플러스': df['Class'] == 'Eco Plus', '비즈니스석': df['Class'] == 'Business'}
-out = {}
-for n, m in seg.items():
-    Xs = pd.get_dummies(X[m], drop_first=True); Xs = sm.add_constant(Xs).astype(float)
-    Xs = Xs.loc[:, Xs.std() > 0].copy(); Xs.insert(0, 'const', 1.0)
-    mod = sm.Logit(y[m], Xs).fit(disp=0, maxiter=200)
-    out[n] = {k: lift(mod, Xs, [c for c in f if c in Xs], [c for c in z if c in Xs]) * 100 for k, (f, z) in list(items.items())[:3]}
-    out[n]['base'] = float(y[m].mean() * 100)
-print(json.dumps(out, ensure_ascii=False, indent=1))
-json.dump({'overall': res, 'seg': out, 'base': float(pf.mean() * 100)}, open(NUM + 'lift.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+with open(OUTPUT / "lift.json", "w", encoding="utf-8") as file:
+    json.dump(output, file, ensure_ascii=False, indent=1)

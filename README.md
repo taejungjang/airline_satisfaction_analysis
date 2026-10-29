@@ -18,10 +18,10 @@
 
 ![점수별 만족률](charts/score_vs_satisfaction.png)
 
-### 2. 어떤 서비스를 먼저 개선할까: 오즈비로 순위
-오즈비는 다른 조건이 같을 때 해당 서비스가 4점 이상이면 만족할 가능성이 몇 배가 되는지입니다. 오즈비 순위로 우선순위를 정하고, 이해하기 쉽게 예측 만족률 변화(%p, 퍼센트끼리의 차이)로 환산했습니다.
+### 2. 어떤 서비스를 먼저 개선할까: 만족률 변화량(%p) 순위
+오즈비는 다른 조건이 같을 때 해당 서비스가 4점 이상이면 만족 오즈가 몇 배가 되는지입니다. 우선순위는 만족률 변화량(%p, 퍼센트끼리의 차이)으로 정했으며, 이는 모든 승객의 해당 서비스 평가를 4점 이상으로 설정했을 때 모델이 예측한 전체 만족률 변화량입니다(실제 개선 결과가 아닌 예측값).
 
-| 순위 | 서비스 | 오즈비 | 예측 만족률 변화 (현재 43.3%) |
+| 순위 | 서비스 | 오즈비 | 모델 예측 만족률 변화량 (현재 43.3%) |
 |---|---|---|---|
 | 1 | 기내 와이파이 | 5.7배 | +11.8%p |
 | 2 | 온라인 탑승 | 4.9배 | +8.2%p |
@@ -32,13 +32,10 @@
 
 ![서비스별 오즈비](charts/service_odds_ratio.png)
 
-### 3. 온라인 탑승과 체크인은 무엇이 다른가
-설문에서 따로 평가된 별개 항목입니다(데이터 설명에는 만족도로만 표기되어 일반적인 의미로 풀이: 온라인 탑승은 앱·웹으로 하는 탑승 절차, 체크인은 공항에서 받는 수속 서비스). 온라인 탑승은 3점 14% → 4점 62%(+49%p)로 크게 뛰고, 체크인은 3점에서 이미 45%라 4점이 돼도 46%(+1%p)로 4점 기준의 효과가 작았습니다.
+### 3. 승객 구분별로는
+모델에서 영향이 큰 구분(여행 목적, 고객 유형, 좌석 등급)으로 나눠 같은 분석을 반복했습니다. 단위는 %p(모델 예측 변화량)입니다.
 
-![온라인 탑승 vs 체크인](charts/onlineboarding_vs_checkin.png)
-
-### 4. 승객 구분별로는
-모델에서 영향이 큰 구분(여행 목적, 고객 유형, 좌석 등급)으로 나눠 같은 분석을 반복했습니다. 단위는 %p입니다.
+![구분별 효과](charts/segment_effect.png)
 
 | 구분 | 그룹 | 현재 만족률 | 와이파이 | 온라인 탑승 | 체크인 |
 |---|---|---|---|---|---|
@@ -67,18 +64,20 @@
 3. 저장소 루트에서 번호 순서대로 실행
 
 ```bash
-python code/01_analysis.py          # 전처리, 로지스틱 회귀, 성능 (수치는 output/)
-python code/02_service_lift.py      # 서비스별 개선 효과, 구분별 효과
-python code/03_charts.py            # 승객 유형별·와이파이 점수별 차트
-python code/03b_segment_chart.py    # 출장 vs 개인 여행 효과 차트
-python code/04_tableau_data.py      # 대시보드·Tableau용 집계 CSV
-python code/05_build_dashboard.py   # HTML 대시보드 생성 (airline_dashboard.html)
+python code/01_analysis.py          # 전처리, 로지스틱 회귀, 모델 성능과 오즈비 (output/res.json, or_table.csv)
+python code/02_service_lift.py      # 서비스별, 구분별 예측 만족률 변화량 (output/lift.json)
+python code/03_charts.py            # README 그래프 3개 (charts/)
+python code/04_tableau_data.py      # 대시보드, Tableau용 CSV (output/tableau/)
+python code/05_build_dashboard.py   # HTML 대시보드 (airline_dashboard.html)
 ```
 
 ## 폴더 구조
 ```
-code/                    분석·차트·대시보드 생성 스크립트 (config.py: 경로와 폰트 설정)
-charts/                  차트 이미지
+code/
+  config.py              파일 경로와 그래프 한글 글꼴 설정
+  common.py              공통 기능: 데이터 읽기, 전처리, 모델 학습, 만족률 변화량 계산 (01, 02, 04가 함께 사용)
+  01_analysis.py         ~ 05_build_dashboard.py   위 실행 순서의 코드
+charts/                  README에 쓰는 그래프 이미지
 dashboard/               HTML 대시보드 템플릿
 airline_dashboard.html   완성된 대시보드 (위 링크로 바로 실행)
 data/                    train.csv 위치 (저장소 제외)

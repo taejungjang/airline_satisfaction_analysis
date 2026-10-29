@@ -110,7 +110,7 @@ footer{margin-top:28px;font-size:12.5px;color:var(--ink2);display:grid;gap:4px}
       <div class="kpi"><div class="l">1위 기내 와이파이</div><div class="v hl" id="k-1">+11.8%p</div></div>
       <div class="kpi"><div class="l">2위 온라인 탑승</div><div class="v hl" id="k-2">+8.2%p</div></div>
     </div>
-    <div class="def"><b>기준</b> 서비스 평가가 4점 미만 → 4점 이상으로 오를 때, 전체 비행 만족률이 몇 %p(퍼센트끼리의 차이) 오르는가. 로지스틱 회귀의 오즈비(와이파이 5.7배, 온라인 탑승 4.9배)로 영향 순위를 정하고, 이해하기 쉽게 만족률 변화로 환산함</div>
+    <div class="def"><b>기준</b> 서비스 평가가 4점 미만 → 4점 이상으로 오를 때, 전체 비행 만족률이 몇 %p(퍼센트끼리의 차이) 오르는가. 모든 승객의 해당 서비스를 4점 이상으로 설정했을 때 모델(로지스틱 회귀)이 예측한 전체 만족률 변화량이며 이 순서가 우선순위임 (오즈비: 와이파이 5.7배, 온라인 탑승 4.9배). 실제 개선 결과가 아닌 예측값</div>
     <div class="grid">
       <div class="panel">
         <h2>서비스별 개선 효과</h2>

@@ -16,7 +16,7 @@ fig, ax = plt.subplots(figsize=(8.4, 4.8))
 ax.bar(x - w / 2, a, w, color='#1F3A5F', label='출장 고객'); ax.bar(x + w / 2, b, w, color='#E07B39', label='개인 여행 고객')
 for i in range(3):
     ax.text(i - w / 2, a[i] + .8, f'+{a[i]:.0f}%p', ha='center', fontweight='bold', fontsize=14)
-    ax.text(i + w / 2, b[i] + .8, f'+{b[i]:.0f}%p' if b[i] >= 0.5 else '0%p', ha='center', fontweight='bold', fontsize=14)
+    ax.text(i + w / 2, b[i] + .8, f'+{b[i]:.0f}%p' if b[i] >= 0.5 else '변화 미미\n(약 0%p)', ha='center', fontweight='bold', fontsize=14 if b[i] >= 0.5 else 11)
 ax.set_xticks(x); ax.set_xticklabels(names, fontsize=14); ax.set_ylim(0, 36); ax.set_ylabel('전체 비행 만족률 상승폭 (%p)')
 ax.legend(frameon=False, fontsize=13, loc='upper right')
 for s in ['top', 'right']: ax.spines[s].set_visible(False)

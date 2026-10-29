@@ -10,5 +10,5 @@ ALL = [{'s': r['서비스'], 'lift': float(r['전원 개선 시 상승폭(%p)'])
 SUM = [[r['여행 목적'], r['고객 유형'], r['좌석 등급'], r['서비스'], int(r['점수']), int(r['승객 수']), int(r['만족 승객 수'])] for _, r in sm.iterrows()]
 data = 'var LIFT=%s;\nvar ALL=%s;\nvar SUM=%s;' % (json.dumps(LIFT, ensure_ascii=False), json.dumps(ALL, ensure_ascii=False), json.dumps(SUM, ensure_ascii=False, separators=(',', ':')))
 html = open(DASH_TEMPLATE, encoding='utf-8').read().replace('/*__DATA__*/', data)
-open(OUTPUT / 'airline_dashboard.html', 'w', encoding='utf-8').write(html)
+open(ROOT / 'airline_dashboard.html', 'w', encoding='utf-8').write(html)
 print(len(html) // 1024, 'KB')

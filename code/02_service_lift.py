@@ -49,7 +49,8 @@ c2 = lambda x: 'bad_or_normal' if x <= 3 else 'good'
 for c in ["Food and drink", "Leg room service", "Checkin service", "Cleanliness"]: X[c] = X[c].apply(c1)
 for c in ["Inflight wifi service", "Ease of Online booking", "Online boarding", "Seat comfort", "Inflight entertainment", "On-board service", "Baggage handling", "Inflight service", "Departure/Arrival time convenient"]: X[c] = X[c].apply(c2)
 seg = {'출장': df['Type of Travel'] == 'Business travel', '개인 여행': df['Type of Travel'] != 'Business travel',
-       '충성': df['Customer Type'] == 'Loyal Customer', '비충성': df['Customer Type'] != 'Loyal Customer'}
+       '충성': df['Customer Type'] == 'Loyal Customer', '비충성': df['Customer Type'] != 'Loyal Customer',
+       '이코노미': df['Class'] == 'Eco', '이코노미 플러스': df['Class'] == 'Eco Plus', '비즈니스석': df['Class'] == 'Business'}
 out = {}
 for n, m in seg.items():
     Xs = pd.get_dummies(X[m], drop_first=True); Xs = sm.add_constant(Xs).astype(float)

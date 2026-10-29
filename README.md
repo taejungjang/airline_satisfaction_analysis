@@ -4,6 +4,8 @@
 
 **대시보드 바로 열기**: https://taejungjang.github.io/airline_satisfaction_analysis/airline_dashboard.html
 
+코드가 어떻게 실행되는지, 파일마다 무슨 역할인지는 [CODE_GUIDE.md](CODE_GUIDE.md)에 정리했습니다.
+
 ## 한 줄 요약
 승객 10명 중 6명은 전체 비행에 만족하지 못했습니다(만족률 43.3%). 서비스는 14개인데 예산은 한정되어 있어, 어떤 서비스를 먼저 개선해야 만족률이 가장 많이 오를지 로지스틱 회귀로 비교했습니다. 결과는 **기내 와이파이 → 온라인 탑승** 순입니다.
 
